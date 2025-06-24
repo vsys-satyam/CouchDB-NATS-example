@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"blog-app/commons/models"
@@ -35,8 +36,10 @@ func CreatePost(post *models.BlogPost) (*models.BlogPost, error) {
 	data, _ := json.Marshal(post)
 	req, err := http.NewRequest("POST", dbURL(), bytes.NewReader(data))
 	if err != nil {
+		log.Print(err)
 		return nil, err
 	}
+	req.Header.Set("Content-Type", "application/json")
 	res, err := c.Client.Do(req)
 	if err != nil {
 		return nil, err

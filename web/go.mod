@@ -2,7 +2,10 @@ module web
 
 go 1.24.4
 
-require github.com/nats-io/nats.go v1.43.0
+require (
+	blog-app/commons v0.0.0-00010101000000-000000000000
+	github.com/nats-io/nats.go v1.43.0
+)
 
 require (
 	github.com/gorilla/mux v1.8.1
