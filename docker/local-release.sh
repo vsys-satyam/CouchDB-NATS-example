@@ -29,7 +29,7 @@ docker image prune -f
 # Step 4: Build and bring up services fresh
 echo "🚀 Rebuilding and starting services..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT_NAME" build --no-cache
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up
 
 # Step 5: Start NATS Bash Client if not already running
 if pgrep -f "NatsClient" >/dev/null; then

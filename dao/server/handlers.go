@@ -15,6 +15,7 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	log.Println("-->>", post)
 	created, err := CreatePost(&post)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -77,7 +78,6 @@ func GetAllPostsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to get posts: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("-->>%+v", posts)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
 }

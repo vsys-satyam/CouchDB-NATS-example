@@ -96,14 +96,14 @@ func (b *BlogPost) Build() string {
 <button type="submit" class="btn btn-primary" id="sendBrowserMessageButton">Submit</button>
 </form>
 
-    <div class="blogs" id="messages">` + blogDiv.String() + `</div>
+    <div class="blogs" id="messageblogs">` + blogDiv.String() + `</div>
 
     <script type="module">
     //js
     import { connect, StringCodec, createInbox } from "/static/nats1.js";
 
     const statusSpan = document.getElementById("natsConnectionStatus");
-    const messagesDiv = document.getElementById("messages");
+    const messagesDiv = document.getElementById("messageblogs");
     const title = document.getElementById("title");
     const author = document.getElementById("name");
     const content = document.getElementById("content");
@@ -126,12 +126,9 @@ func (b *BlogPost) Build() string {
 
                 if (titleText && authorText && contentText) {
                     const msg = await nc.request('browser.msg', sc.encode(JSON.stringify({ title: titleText, author: authorText, content: contentText })));
-                    console.log('Got reply:', sc.decode(msg.data));
+                    // console.log('Got reply:', sc.decode(msg.data));
                     const decoded = sc.decode(msg.data);
-                    const msgElem = document.createElement("div");
-                    msgElem.className = "message-item";
-                    msgElem.textContent += "[REPLY]:" + decoded;
-                    messagesDiv.appendChild(msgElem);
+                    messagesDiv.innerHTML += decoded;
                     content.value = "";  // Clear content after submission
                     title.value = "";    // Clear title after submission
                     author.value = "";   // Clear author after submission
