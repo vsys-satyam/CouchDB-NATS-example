@@ -1,0 +1,44 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  nats:
+    image: nats:latest
+    container_name: nats-server
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf
+    command: ["-c", "/etc/nats/nats.conf"]
+    restart: always
+
+  couchdb:
+    image: couchdb:latest
+    container_name : "couchDB"
+    ports:
+      - "5984:5984"
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=admin
+    restart: always
+    volumes:
+      - ./data:/opt/couchdb/data
+
+  dbhelper:
+    build: ../dao/
+    image: blog-app/dao
+    container_name: blog-app-dao
+    network_mode: "host"
+    restart: always
+    depends_on:
+      - couchdb
+  
+  web:
+    build: ../web/
+    image: blog-app/web
+    container_name: blog-app-web
+    network_mode: "host"
+    restart: always
+    depends_on:
+      - dbhelper
