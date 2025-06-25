@@ -125,7 +125,7 @@ func (b *BlogPost) Build() string {
                 const contentText = content.value.trim();
 
                 if (titleText && authorText && contentText) {
-                    const msg = await nc.request('browser.msg', sc.encode(JSON.stringify({ title: titleText, author: authorText, content: contentText })));
+                    const msg = await nc.request('blog.msg.create', sc.encode(JSON.stringify({ title: titleText, author: authorText, content: contentText })));
                     // console.log('Got reply:', sc.decode(msg.data));
                     const decoded = sc.decode(msg.data);
                     messagesDiv.innerHTML += decoded;
@@ -133,7 +133,31 @@ func (b *BlogPost) Build() string {
                     title.value = "";    // Clear title after submission
                     author.value = "";   // Clear author after submission
                 }
+                attachDeleteListeners();
             });
+
+            // --- Attach delete handler to all buttons ---
+        function attachDeleteListeners() {
+            document.querySelectorAll(".delete-btn").forEach(button => {
+                button.onclick = () => {
+                    const messageDiv = button.closest(".message-list");
+                    const postId = messageDiv.id.replace("messages-", "");
+
+                    // Find the <b> tag and extract the actual title
+                    const titleLine = messageDiv.querySelector("b")?.textContent || "";
+                    const messageTitle = titleLine.replace("Title :", "").trim();
+
+                    if (confirm("Delete post: " + messageTitle )) {
+                        nc.publish("blog.msg.delete", sc.encode(postId));
+                        messageDiv.remove();
+                    }
+                };
+            });
+        }
+
+        // Call once in case there are already rendered messages
+        attachDeleteListeners();
+
         } catch (err) {
             statusSpan.textContent = "Error";
             statusSpan.style.color = "red";
@@ -152,8 +176,12 @@ func (b *BlogPost) Build() string {
 
 func (b *BlogPost) BuildBlogsDiv() string {
 	var html strings.Builder
-	html.WriteString(`<div class="message-list" id="messages">
-    <b>Title :` + b.Title + `</b> </br>
+	html.WriteString(`<div class="message-list" id="messages-` + b.ID + `" style="position: relative; border: 1px solid #ccc; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+    <!-- Delete Button -->
+    <button class="btn btn-sm btn-danger delete-btn" style="position: absolute; top: 5px; right: 5px;">
+        Delete
+    </button>
+    <b class="message-title">Title :` + b.Title + `</b> </br>
     Author : ` + b.Author + ` <br>
     Post : ` + b.Content + ` <br>
     </div>`)

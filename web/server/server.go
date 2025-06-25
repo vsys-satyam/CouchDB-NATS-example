@@ -3,9 +3,11 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	natsconn "web/nats"
 
@@ -18,7 +20,7 @@ import (
 
 const (
 	port              = "8081"
-	browserMsgSubject = "browser.msg"
+	browserMsgSubject = "blog.msg."
 )
 
 func Web() {
@@ -43,43 +45,86 @@ func Web() {
 }
 
 func subscribeToBrowserMsgs() {
-	_, err := natsconn.Conn.Subscribe(browserMsgSubject, func(m *nats.Msg) {
-		log.Printf(" Received from browser: %s", string(m.Data))
+	_, err := natsconn.Conn.Subscribe(browserMsgSubject+">", func(m *nats.Msg) {
+		subjectSuffix := strings.TrimPrefix(m.Subject, browserMsgSubject)
+		subjectSuffix = strings.TrimPrefix(subjectSuffix, ".")
+		switch subjectSuffix {
+		case "create":
+			var post models.BlogPost
+			if err := json.Unmarshal(m.Data, &post); err != nil {
+				log.Printf("Failed to decode JSON: %v", err)
+				return
+			}
+			// Send HTTP POST request to REST API
+			jsonData, err := json.Marshal(post)
+			if err != nil {
+				log.Printf("Error marshalling post: %v", err)
+				return
+			}
+			resp, err := http.Post("http://0.0.0.0:8080/posts", "application/json", bytes.NewBuffer(jsonData))
+			if err != nil {
+				log.Printf("Failed to POST to REST API: %v", err)
+				return
+			}
+			defer resp.Body.Close()
+			log.Printf("POST request sent, status: %s", resp.Status)
+			if err := json.NewDecoder(resp.Body).Decode(&post); err != nil {
+				log.Print(err)
+			}
+			// Optional reply to browser
+			if m.Reply != "" {
+				strig := (*page.BlogPost)(&post).BuildBlogsDiv()
+				_ = natsconn.Conn.Publish(m.Reply, []byte(strig))
+			}
+		case "delete":
+			id := string(m.Data)
+			log.Printf("Received 'delete' for Blog ID: %s", id)
 
-		var post models.BlogPost
-		if err := json.Unmarshal(m.Data, &post); err != nil {
-			log.Printf(" Failed to decode JSON: %v", err)
-			return
-		}
+			var post models.BlogPost
 
-		log.Printf("Decoded BlogPost - Title: %s, Author: %s, Content: %s", post.Title, post.Author, post.Content)
+			// Step 1: Fetch post by ID to get its current rev
+			getResp, err := http.Get("http://0.0.0.0:8080/posts?id=" + id)
+			if err != nil {
+				log.Printf("Failed to fetch post before delete: %v", err)
+				return
+			}
+			defer getResp.Body.Close()
 
-		// Send HTTP POST request to REST API
-		jsonData, err := json.Marshal(post)
-		if err != nil {
-			log.Printf(" Error marshalling post: %v", err)
-			return
-		}
+			if getResp.StatusCode != http.StatusOK {
+				log.Printf("Failed to fetch post: status %s", getResp.Status)
+				return
+			}
 
-		resp, err := http.Post("http://0.0.0.0:8080/posts", "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			log.Printf(" Failed to POST to REST API: %v", err)
-			return
-		}
-		defer resp.Body.Close()
+			if err := json.NewDecoder(getResp.Body).Decode(&post); err != nil {
+				log.Printf("Failed to decode GET response: %v", err)
+				return
+			}
 
-		log.Printf("POST request sent, status: %s", resp.Status)
-		if err := json.NewDecoder(resp.Body).Decode(&post); err != nil {
-			log.Print(err)
-		}
-		// Optional reply to browser
-		if m.Reply != "" {
-			strig := (*page.BlogPost)(&post).BuildBlogsDiv()
-			_ = natsconn.Conn.Publish(m.Reply, []byte(strig))
+			deleteURL := fmt.Sprintf("http://0.0.0.0:8080/posts?id=%s&rev=%s", post.ID, post.Rev)
+			req, err := http.NewRequest(http.MethodDelete, deleteURL, nil)
+			if err != nil {
+				log.Printf("Failed to create delete request: %v", err)
+				return
+			}
+
+			delResp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Printf("Failed to send delete request: %v", err)
+				return
+			}
+			defer delResp.Body.Close()
+			log.Printf("delete request sent for ID %s, status: %s", id, delResp.Status)
+			if m.Reply != "" {
+				_ = natsconn.Conn.Publish(m.Reply, []byte("Deleted: "+id))
+			}
+
+		default:
+			log.Printf("Ignoring unknown subtopic '%s'", subjectSuffix)
 		}
 	})
+
 	if err != nil {
-		log.Fatalf(" Error subscribing to '%s': %v", browserMsgSubject, err)
+		log.Fatalf("Error subscribing to '%s': %v", browserMsgSubject+">", err)
 	}
-	log.Printf("Subscribed to NATS subject: %s", browserMsgSubject)
+	log.Printf("Subscribed to NATS subject: %s>", browserMsgSubject)
 }
