@@ -78,7 +78,6 @@ func subscribeToBrowserMsgs() {
 			}
 		case "delete":
 			id := string(m.Data)
-			log.Printf("Received 'delete' for Blog ID: %s", id)
 
 			var post models.BlogPost
 
@@ -117,7 +116,71 @@ func subscribeToBrowserMsgs() {
 			if m.Reply != "" {
 				_ = natsconn.Conn.Publish(m.Reply, []byte("Deleted: "+id))
 			}
+		case "editdialog":
+			id := string(m.Data)
 
+			var post models.BlogPost
+
+			// Step 1: Fetch post by ID to get its current rev
+			getResp, err := http.Get("http://0.0.0.0:8080/posts?id=" + id)
+			if err != nil {
+				log.Printf("Failed to fetch post before delete: %v", err)
+				return
+			}
+			defer getResp.Body.Close()
+
+			if getResp.StatusCode != http.StatusOK {
+				log.Printf("Failed to fetch post: status %s", getResp.Status)
+				return
+			}
+
+			if err := json.NewDecoder(getResp.Body).Decode(&post); err != nil {
+				log.Printf("Failed to decode GET response: %v", err)
+				return
+			}
+			editdialog := (*page.BlogPost)(&post).BuildEditDialog()
+			_ = natsconn.Conn.Publish(m.Reply, []byte(editdialog))
+		case "update":
+			var post models.BlogPost
+			if err := json.Unmarshal(m.Data, &post); err != nil {
+				log.Printf("Failed to decode JSON: %v", err)
+				return
+			}
+
+			jsonData, err := json.Marshal(post)
+			if err != nil {
+				log.Printf("Error marshalling post: %v", err)
+				return
+			}
+			req, err := http.NewRequest(http.MethodPut, "http://0.0.0.0:8080/posts", bytes.NewBuffer(jsonData))
+			if err != nil {
+				log.Printf("Failed to POST to REST API: %v", err)
+				return
+			}
+			updateResp, _ := http.DefaultClient.Do(req)
+			if err := json.NewDecoder(updateResp.Body).Decode(&post); err != nil {
+				log.Print(err)
+			}
+			defer updateResp.Body.Close()
+			// Optional reply to browser
+			if m.Reply != "" {
+				var posts []models.BlogPost
+				req, err := http.NewRequest(http.MethodGet, "http://0.0.0.0:8080/posts/all", nil)
+				if err != nil {
+					log.Printf("Failed to POST to REST API: %v", err)
+					return
+				}
+				updateResp, _ := http.DefaultClient.Do(req)
+				if err := json.NewDecoder(updateResp.Body).Decode(&posts); err != nil {
+					log.Print(err)
+				}
+				var html strings.Builder
+				for i := range posts {
+					editdialog := (*page.BlogPost)(&posts[i]).BuildBlogsDiv()
+					html.WriteString(editdialog)
+				}
+				_ = natsconn.Conn.Publish(m.Reply, []byte(html.String()))
+			}
 		default:
 			log.Printf("Ignoring unknown subtopic '%s'", subjectSuffix)
 		}

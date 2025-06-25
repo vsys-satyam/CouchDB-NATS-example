@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"blog-app/commons/models"
@@ -15,7 +14,6 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	log.Println("-->>", post)
 	created, err := CreatePost(&post)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -39,17 +37,13 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdatePostHandler(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		http.Error(w, "Missing ?id param", http.StatusBadRequest)
-		return
-	}
 	var post models.BlogPost
 	if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	post.ID = id
+	oldPost, _ := GetPost(post.ID)
+	post.Rev = oldPost.Rev
 	updated, err := UpdatePost(&post)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
